@@ -9,6 +9,9 @@ def load_config():
     with open("config.yml") as file:
         config_data = yaml.load(file, Loader=yaml.FullLoader)
 
+    if not config_data:
+        raise Exception("Can't find config file.")
+
     return config_data
 
 
@@ -23,6 +26,7 @@ def load_texted():
 
 
 def stub_texted(config_data, texted_data):
+    # TODO: Also stub new rss urls
     for mobile in config_data:
         if mobile not in texted_data:
             texted_data[mobile] = {
@@ -33,29 +37,27 @@ def stub_texted(config_data, texted_data):
                 texted_data[mobile][rss_feed] = []
 
 
-def text_post(mobile, post, sms_client):
-    sms_message = f'Alert {post["keyword"]}\n{post["title"]}\n{post["link"]}'
+def text_posts(sms_client, posts_to_text, texted_data):
+    # TODO: Handle texting errors
 
-    if len(sms_message) > 160:
-        # TODO: Optimisations around character length
-        print(f"Too many characters..\n{sms_message}")
-        return False
+    for post in posts_to_text:
+        text_result = sms_client.publish(
+            PhoneNumber=post["mobile"],
+            Message=post["message"],
+            Subject="RSS SMS"
+        )
 
-    sms_res = sms_client.publish(
-        PhoneNumber=mobile,
-        Message=sms_message,
-        Subject="RSS SMS"
-    )
-
-    return sms_res
+        # Track the texted URLs
+        texted_data[post["mobile"]]["texts"] += 1
+        texted_data[post["mobile"]][post["rss_url"]].append(post["link"])
 
 
-def check_feeds(config_data, texted_data, sms_client):
+def check_feeds(config_data, texted_data):
+    posts_to_text = []
+
     for mobile in config_data:
         print(f"Scanning for {mobile}")
         rss_urls = config_data[mobile]
-
-        posts_to_text = []
 
         for rss_url in rss_urls:
             # Load the rss_feed
@@ -67,14 +69,16 @@ def check_feeds(config_data, texted_data, sms_client):
                 keywords = config_data[mobile][rss_url]
 
                 for keyword in keywords:
-                    keyword = keyword.lower()
                     stripped_post = {
                         "title": post["title"],
                         "summary": post["summary"],
                         "link": post["link"],
+                        "mobile": mobile,
                         "rss_url": rss_url,
                         "keyword": keyword,
                     }
+
+                    keyword = keyword.lower()
 
                     # Check if keyword is in the post, but not already texted
                     if (keyword in stripped_post["title"].lower() or
@@ -83,20 +87,7 @@ def check_feeds(config_data, texted_data, sms_client):
                         posts_to_text.append(stripped_post)
                         break
 
-        print(posts_to_text)
-
-        # Text the deals to the mobile
-        print(f"Texting {mobile} {len(posts_to_text)} posts")
-        for post in posts_to_text:
-            print(text_post(mobile, post, sms_client))
-
-        # Track the texted URLs
-        texted_data[mobile]["texts"] = texted_data[mobile]["texts"] + len(posts_to_text)
-
-        for texted_post in posts_to_text:
-            texted_data[mobile][texted_post["rss_url"]].append(texted_post["link"])
-
-    pass
+    return posts_to_text
 
 
 def update_texted(texted_data):
@@ -122,22 +113,41 @@ def aws_client():
     return sns_client
 
 
-if __name__ == "__main__":
-    # Create sms client
-    client = aws_client()
+def clean_posts(posts_to_text):
+    # TODO: Clean up/optimise the posts
 
+    for post in posts_to_text:
+        sms_message = f'Alert {post["keyword"]}\n{post["title"]}\n{post["link"]}'
+
+        if len(sms_message) > 160:
+            # TODO: Optimisations around character length
+            print(f"Too many characters..\n{sms_message}")
+            sms_message = f'Alert {post["keyword"]}\n{post["link"]}'
+
+        post["message"] = sms_message
+
+    return posts_to_text
+
+
+if __name__ == "__main__":
     # Load config
     config = load_config()
-    print(config)
 
     # Load texted
     texted = load_texted()
     stub_texted(config, texted)
-    print(texted)
-    print()
 
-    # Go through each mobile, each URL and search the most recent posts for each keyword
-    check_feeds(config, texted, client)
+    # Check for posts to text
+    posts = check_feeds(config, texted)
 
-    # Update the texted file
+    # Prepare the posts for texting
+    posts = clean_posts(posts)
+
+    # Create sms client
+    client = aws_client()
+
+    # Text the posts
+    text_posts(client, posts, texted)
+
+    # Update texted file
     update_texted(texted)
