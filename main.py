@@ -1,31 +1,21 @@
-import yaml
 import feedparser
-import boto3
 from dotenv import load_dotenv
 import os
-import requests
+
+# Import APIs
+from sms_apis.sms_aws import SmsAws
+from file_apis.file_local import FileLocal
+from file_apis.file_aws import FileAws
+from url_apis.url_tinyurl import UrlTinyurl
+
+# Assign APIs
+sms_client = SmsAws()
+file_config = FileLocal()
+file_texted = FileAws()
+url_client = UrlTinyurl()
 
 load_dotenv()
-
-
-def load_config():
-    with open("config.yml") as file:
-        config_data = yaml.load(file, Loader=yaml.FullLoader)
-
-    if not config_data:
-        raise Exception("Can't find config file.")
-
-    return config_data
-
-
-def load_texted():
-    with open("texted.yml") as file:
-        texted_data = yaml.load(file, Loader=yaml.FullLoader)
-
-    if not texted_data:
-        texted_data = {}
-
-    return texted_data
+MAX_SMS_LENGTH = int(os.getenv("MAX_SMS_LENGTH"))
 
 
 def stub_texted(config_data, texted_data):
@@ -40,19 +30,14 @@ def stub_texted(config_data, texted_data):
                 texted_data[mobile][rss_feed] = []
 
 
-def text_posts(sms_client, posts_to_text, texted_data):
-    # TODO: Handle texting errors
-
+def text_posts(posts_to_text, texted_data):
     for post in posts_to_text:
-        text_result = sms_client.publish(
-            PhoneNumber=post["mobile"],
-            Message=post["message"],
-            Subject="RSS SMS"
-        )
+        text_result = sms_client.send_sms(post)
 
-        # Track the texted URLs
-        texted_data[post["mobile"]]["texts"] += 1
-        texted_data[post["mobile"]][post["rss_url"]].append(post["link"])
+        if text_result:
+            # Track the texted URLs
+            texted_data[post["mobile"]]["texts"] += 1
+            texted_data[post["mobile"]][post["rss_url"]].append(post["link"])
 
 
 def check_feeds(config_data, texted_data):
@@ -90,34 +75,10 @@ def check_feeds(config_data, texted_data):
     return posts_to_text
 
 
-def update_texted(texted_data):
-    with open("texted.yml", "w") as file:
-        yaml.dump(texted_data, file)
-
-
-def aws_client():
-    aws_access_key_id = os.getenv("aws_access_key_id")
-    aws_secret_access_key = os.getenv("aws_secret_access_key")
-    aws_region_name = os.getenv("aws_region_name")
-
-    # Create SNS client
-    sns_client = boto3.client(
-        "sns",
-        aws_access_key_id=aws_access_key_id,
-        aws_secret_access_key=aws_secret_access_key,
-        region_name=aws_region_name
-    )
-
-    return sns_client
-
-
 def clean_posts(posts_to_text):
-    MAX_SMS_LENGTH = int(os.getenv("MAX_SMS_LENGTH"))
-    TINY_URL_PREFIX = "http://tinyurl.com/api-create.php?url="
-
     for post in posts_to_text:
         alert_text = f'Alert: {post["keyword"]}'
-        post["short_link"] = requests.get(TINY_URL_PREFIX + post["link"]).text.split('//')[1]
+        post["short_link"] = url_client.shorten_url(post["link"])
         title_chars = MAX_SMS_LENGTH - len(alert_text) - len(post["short_link"]) - 2
 
         if title_chars != len(post["title"]):
@@ -129,12 +90,12 @@ def clean_posts(posts_to_text):
     return posts_to_text
 
 
-if __name__ == "__main__":
+def main(event=None, context=None):
     # Load config
-    config = load_config()
+    config = file_config.read_file_yaml("config.yml")
 
     # Load texted
-    texted = load_texted()
+    texted = file_texted.read_file_yaml("texted.yml")
     stub_texted(config, texted)
 
     # Check for posts to text
@@ -143,11 +104,12 @@ if __name__ == "__main__":
     # Prepare the posts for texting
     posts = clean_posts(posts)
 
-    # Create sms client
-    client = aws_client()
-
     # Text the posts
-    text_posts(client, posts, texted)
+    text_posts(posts, texted)
 
     # Update texted file
-    update_texted(texted)
+    file_texted.write_file_yaml("texted.yml", texted)
+
+
+if __name__ == "__main__":
+    main()
