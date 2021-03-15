@@ -1,2 +1,8 @@
 venv/*
 .idea/*
+.env
+config.yml
+texted.yml
+*__pycache__
+dist/*
+build/*

@@ -1,0 +1,5 @@
+PyYAML
+feedparser
+boto3
+python-dotenv
+requests
