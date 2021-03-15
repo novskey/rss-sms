@@ -15,7 +15,10 @@ file_texted = FileAws()
 url_client = UrlTinyurl()
 
 load_dotenv()
-MAX_SMS_LENGTH = int(os.getenv("MAX_SMS_LENGTH"))
+MAX_SMS_LENGTH = int(os.getenv("max_sms_length"))
+
+if not MAX_SMS_LENGTH:
+    raise Exception("Missing max_sms_length from the environment.")
 
 
 def stub_texted(config_data, texted_data):
@@ -54,6 +57,8 @@ def check_feeds(config_data, texted_data):
                 keywords = config_data[mobile][rss_url]
 
                 for keyword in keywords:
+                    keyword = str(keyword)
+
                     stripped_post = {
                         "title": post["title"],
                         "summary": post["summary"],
@@ -90,7 +95,7 @@ def clean_posts(posts_to_text):
     return posts_to_text
 
 
-def main(event=None, context=None):
+def main():
     # Load config
     config = file_config.read_file_yaml("config.yml")
 
@@ -109,6 +114,16 @@ def main(event=None, context=None):
 
     # Update texted file
     file_texted.write_file_yaml("texted.yml", texted)
+
+
+# Amazon Lambda Handler
+def lambda_handler(event=None, context=None):
+    main()
+
+    return {
+        'statuscode': 200,
+        'body': 'success'
+    }
 
 
 if __name__ == "__main__":
