@@ -11,23 +11,22 @@ AWS_SECRET_ACCESS_KEY = os.getenv("aws_secret_access_key")
 AWS_REGION_NAME = os.getenv("aws_region_name_file_management")
 BUCKET_NAME = os.getenv("bucket_name")
 
-if not AWS_ACCESS_KEY_ID:
-    raise Exception("Missing aws_access_key_id from the environment.")
-
-if not AWS_SECRET_ACCESS_KEY:
-    raise Exception("Missing aws_secret_access_key from the environment.")
-
-if not AWS_REGION_NAME:
-    raise Exception("Missing aws_region_name from the environment.")
-
-if not BUCKET_NAME:
-    raise Exception("Missing bucket_name from the environment.")
-
 
 class FileAws(FileApi):
     client = None
 
     def __init__(self):
+        if not AWS_ACCESS_KEY_ID:
+            raise Exception("Missing aws_access_key_id from the environment.")
+
+        if not AWS_SECRET_ACCESS_KEY:
+            raise Exception("Missing aws_secret_access_key from the environment.")
+
+        if not AWS_REGION_NAME:
+            raise Exception("Missing aws_region_name from the environment.")
+
+        if not BUCKET_NAME:
+            raise Exception("Missing bucket_name from the environment.")
         self.client = self.create_client()
 
     def read_file_yaml(self, file_path):

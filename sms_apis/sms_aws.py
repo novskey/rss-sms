@@ -10,23 +10,22 @@ AWS_SECRET_ACCESS_KEY = os.getenv("aws_secret_access_key")
 AWS_REGION_NAME = os.getenv("aws_region_name_sms")
 MONTHLY_SPEND_LIMIT = os.getenv("monthly_spend_limit")
 
-if not AWS_ACCESS_KEY_ID:
-    raise Exception("Missing aws_access_key_id from the environment.")
-
-if not AWS_SECRET_ACCESS_KEY:
-    raise Exception("Missing aws_secret_access_key from the environment.")
-
-if not AWS_REGION_NAME:
-    raise Exception("Missing aws_region_name from the environment.")
-
-if not MONTHLY_SPEND_LIMIT:
-    raise Exception("Missing monthly_spend_limit from the environment.")
-
 
 class SmsAws(SmsApi):
     client = None
 
     def __init__(self):
+        if not AWS_ACCESS_KEY_ID:
+            raise Exception("Missing aws_access_key_id from the environment.")
+
+        if not AWS_SECRET_ACCESS_KEY:
+            raise Exception("Missing aws_secret_access_key from the environment.")
+
+        if not AWS_REGION_NAME:
+            raise Exception("Missing aws_region_name from the environment.")
+
+        if not MONTHLY_SPEND_LIMIT:
+            raise Exception("Missing monthly_spend_limit from the environment.")
         self.client = self.create_client()
 
     def send_sms(self, sms_data):
